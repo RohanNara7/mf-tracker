@@ -301,9 +301,44 @@ def build_funds(raw_funds):
 
 
 # ---------------------------------------------------------------- live + demo sources
+AMFI_URLS = ["https://portal.amfiindia.com/spages/NAVAll.txt", AMFI_URL]
+MFAPI_LIST = "https://api.mfapi.in/mf"
+NAME_HINTS = ("large cap", "largecap", "bluechip", "blue chip", "mid cap", "midcap", "small cap", "smallcap",
+              "flexi cap", "flexicap", "large & mid", "large and mid", "large & midcap")
+
+
+def get_universe(max_per_bucket):
+    for url in AMFI_URLS:
+        print("Downloading AMFI NAV list: %s" % url)
+        try:
+            text = http_get(url)
+        except Exception as e:  # noqa
+            print("  AMFI download failed: %s" % e)
+            continue
+        schemes = parse_amfi(text)
+        uni = pick_universe(schemes, max_per_bucket)
+        print("  got %d characters, %d schemes parsed, %d fit our filters" % (len(text), len(schemes), len(uni)))
+        if uni:
+            return uni
+        print("  start of response: %r" % text[:200])
+    print("AMFI gave no usable list. Falling back to the mfapi.in scheme list ...")
+    items = json.loads(http_get(MFAPI_LIST))
+    print("  mfapi.in returned %d schemes" % len(items))
+    out = []
+    for it in items:
+        n = str(it.get("schemeName", "")).lower()
+        if "direct" not in n or "growth" not in n or any(w in n for w in ("idcw", "dividend", "bonus", "payout")):
+            continue
+        if any(h in n for h in NAME_HINTS):
+            out.append({"code": str(it["schemeCode"]), "name": it["schemeName"], "cat": "", "bucket": None})
+    if max_per_bucket:
+        out = out[:max_per_bucket * 5]
+    print("  %d candidate schemes by name; category is confirmed from each fund's own record" % len(out))
+    return out
+
+
 def load_live(max_per_bucket, workers):
-    print("Downloading AMFI NAV list ...")
-    universe = pick_universe(parse_amfi(http_get(AMFI_URL)), max_per_bucket)
+    universe = get_universe(max_per_bucket)
     print("Universe: %d direct-growth equity funds" % len(universe))
     raw = []
 
@@ -315,8 +350,12 @@ def load_live(max_per_bucket, workers):
             return None
         if not rows:
             return None
+        cat = meta.get("scheme_category") or f["cat"]
+        bucket = f["bucket"] or (bucket_of(cat) if "Equity Scheme" in cat else None)
+        if not bucket:
+            return None
         return {"code": f["code"], "name": f["name"], "house": meta.get("fund_house", ""),
-                "category": meta.get("scheme_category", f["cat"]), "bucket": f["bucket"],
+                "category": cat, "bucket": bucket,
                 "dates": [d for d, _ in rows], "navs": [n for _, n in rows]}
 
     with ThreadPoolExecutor(workers) as ex:
