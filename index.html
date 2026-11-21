@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MF and IPO Tracker</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: slim header, summary strip, tabbed screener tables with inline expandable detail rows. */
+:root{
+  --bg:#f6f7f5; --surface:#ffffff; --fg:#17201b; --muted:#5f6b64; --line:#dde2dd;
+  --accent:#0b6b4f; --accent-soft:#e0f0ea;
+  --good:#127a45; --good-bg:#e1f3e8; --warn:#8a5a00; --warn-bg:#fbefd2; --bad:#b3261e; --bad-bg:#fbe4e1; --mid-bg:#eceee9;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif; --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1512; --surface:#161e19; --fg:#e6ece8; --muted:#9aa89f; --line:#2a352e;
+  --accent:#4cc79c; --accent-soft:#17352b;
+  --good:#5fd08e; --good-bg:#16372a; --warn:#e8b64c; --warn-bg:#3a2e12; --bad:#ff8a80; --bad-bg:#40201d; --mid-bg:#212b25; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1512; --surface:#161e19; --fg:#e6ece8; --muted:#9aa89f; --line:#2a352e;
+  --accent:#4cc79c; --accent-soft:#17352b;
+  --good:#5fd08e; --good-bg:#16372a; --warn:#e8b64c; --warn-bg:#3a2e12; --bad:#ff8a80; --bad-bg:#40201d; --mid-bg:#212b25; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:14px;line-height:1.45;margin:0}
+.wrap{max-width:1180px;margin:0 auto;padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1{font-size:20px;font-weight:600;margin:0}
+.top{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between;margin-bottom:14px}
+.asof{color:var(--muted);font-size:12.5px;font-family:var(--mono)}
+.banner{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn);border-radius:6px;padding:8px 12px;margin-bottom:14px;font-size:13px}
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:8px;padding:24px;color:var(--muted)}
+.strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px 12px;min-width:0}
+.stat b{display:block;font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
+.stat span{color:var(--muted);font-size:12px}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:12px}
+.tab{background:none;border:0;border-bottom:2px solid transparent;color:var(--muted);font:inherit;font-weight:500;padding:8px 14px;cursor:pointer}
+.tab[aria-selected="true"]{color:var(--fg);border-color:var(--accent)}
+.tab:focus-visible,select:focus-visible,input:focus-visible,tr.row:focus-visible,.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+.chip{background:var(--surface);border:1px solid var(--line);color:var(--fg);border-radius:999px;padding:4px 12px;font:inherit;font-size:13px;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+input[type=search],select{background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:6px 10px;font:inherit;font-size:13px;min-width:0}
+input[type=search]{flex:1 1 180px}
+.tw{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;min-width:860px}
+th,td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap;font-variant-numeric:tabular-nums}
+th{font-size:11.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);cursor:pointer;user-select:none;position:sticky;top:0;background:var(--surface)}
+th:first-child,td:first-child{text-align:left}
+td.name{white-space:normal;min-width:240px;max-width:340px}
+td.name small{display:block;color:var(--muted);font-size:12px}
+tr.row{cursor:pointer}
+tr.row:hover td{background:var(--mid-bg)}
+.pos{color:var(--good)} .neg{color:var(--bad)}
+.badge{display:inline-block;border-radius:4px;padding:2px 8px;font-size:12px;font-weight:600}
+.b-good{background:var(--good-bg);color:var(--good)} .b-mid{background:var(--mid-bg);color:var(--muted)}
+.b-warn{background:var(--warn-bg);color:var(--warn)} .b-bad{background:var(--bad-bg);color:var(--bad)}
+.detail td{text-align:left;white-space:normal;background:var(--bg);padding:14px}
+.dgrid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:18px}
+@media (max-width:760px){.dgrid{grid-template-columns:minmax(0,1fr)}}
+.kv{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px 12px;margin:0 0 12px}
+.kv div{min-width:0}.kv dt{color:var(--muted);font-size:11.5px;text-transform:uppercase;letter-spacing:.04em}
+.kv dd{margin:0;font-weight:500;font-variant-numeric:tabular-nums}
+ul.why{margin:0;padding-left:18px}ul.why li{margin:2px 0}
+.spark{width:100%;height:150px;display:block}
+.note{color:var(--muted);font-size:12px;margin-top:18px;max-width:80ch}
+.sc{display:inline-block;width:44px;height:6px;background:var(--line);border-radius:3px;vertical-align:middle;margin-right:6px;overflow:hidden}
+.sc i{display:block;height:100%;background:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <h1>MF and IPO Tracker <span style="color:var(--muted);font-weight:400">· India</span></h1>
+    <div class="asof" id="asof"></div>
+  </div>
+  <div id="banner"></div>
+  <div id="app"></div>
+  <p class="note">Signals are rule-based scores computed from NAV history (RSI, MACD, 50/200-day averages, peer-ranked returns, Sharpe and drawdown) and from the IPO inputs you supply. They are screening aids, not investment advice. NAV history cannot show expense ratio, AUM, portfolio P/E or holdings; check those on the AMC factsheet before investing.</p>
+</div>
+<script src="data/data.js"></script>
+<script>
+(function(){
+  var D = window.__TRACKER__, app = document.getElementById("app");
+  function h(tag, attrs, kids){
+    var e = document.createElement(tag);
+    for (var k in (attrs||{})) {
+      if (k === "class") e.className = attrs[k]; else if (k === "text") e.textContent = attrs[k];
+      else if (k.slice(0,2) === "on") e.addEventListener(k.slice(2), attrs[k]); else e.setAttribute(k, attrs[k]);
+    }
+    (kids||[]).forEach(function(c){ if (c != null) e.appendChild(typeof c === "string" ? document.createTextNode(c) : c); });
+    return e;
+  }
+  if (!D) {
+    app.appendChild(h("div",{class:"empty",text:"No data yet. Run  python update_data.py  (or  python update_data.py --demo  to preview), then reload this page."}));
+    return;
+  }
+  var fmtP = function(x,d){ return x == null ? "-" : (x*100).toFixed(d==null?1:d) + "%"; };
+  var fmtN = function(x,d){ return x == null ? "-" : x.toFixed(d==null?2:d); };
+  var cls = function(x){ return x == null ? "" : x >= 0 ? "pos" : "neg"; };
+  var callCls = function(c){ return /Strong Buy|^Buy|^Apply$/.test(c) ? "b-good" : /Hold|Neutral|listing/.test(c) ? "b-mid" : /Reduce|Insufficient/.test(c) ? "b-warn" : "b-bad"; };
+  var m = D.meta;
+  document.getElementById("asof").textContent = "Updated " + m.generated_at.replace("T"," ") + " IST · " + m.source;
+  if (m.demo) document.getElementById("banner").appendChild(h("div",{class:"banner",text:"DEMO DATA: synthetic funds and IPOs for previewing the layout. None of these numbers are real. Run update_data.py without --demo for live NAVs."}));
+
+  var funds = D.funds, ipos = D.ipos || [];
+  var state = {tab:"funds", bucket:"All", call:"All", q:"", sort:"total", dir:-1, ipoSort:"score", ipoStatus:"All"};
+  var open = null;
+
+  function stat(v,l){ return h("div",{class:"stat"},[h("b",{text:String(v)}),h("span",{text:l})]); }
+  function strip(){
+    var buy = funds.filter(function(f){return f.call==="Strong Buy"||f.call==="Buy";}).length;
+    var openIpo = ipos.filter(function(i){return i.status==="Open"||i.status==="Upcoming";}).length;
+    var applyN = ipos.filter(function(i){return (i.status==="Open"||i.status==="Upcoming") && i.verdict==="Apply";}).length;
+    return h("div",{class:"strip"},[stat(funds.length,"funds tracked"),stat(buy,"with a Buy call"),stat(openIpo,"open or upcoming IPOs"),stat(applyN,"IPOs scoring Apply")]);
+  }
+  function sparkSvg(arr){
+    var W=600,H=150,p=8,mn=Math.min.apply(null,arr),mx=Math.max.apply(null,arr),n=arr.length;
+    var x=function(i){return p+i*(W-2*p)/(n-1);}, y=function(v){return H-p-(v-mn)/(mx-mn||1)*(H-2*p);};
+    var pts = arr.map(function(v,i){return x(i).toFixed(1)+","+y(v).toFixed(1);}).join(" ");
+    var ns="http://www.w3.org/2000/svg", s=document.createElementNS(ns,"svg");
+    s.setAttribute("viewBox","0 0 "+W+" "+H); s.setAttribute("class","spark"); s.setAttribute("role","img"); s.setAttribute("aria-label","NAV over the last year");
+    function el(t,a){var e=document.createElementNS(ns,t);for(var k in a)e.setAttribute(k,a[k]);s.appendChild(e);return e;}
+    el("polygon",{points:p+","+(H-p)+" "+pts+" "+(W-p)+","+(H-p),fill:"var(--accent-soft)"});
+    el("polyline",{points:pts,fill:"none",stroke:"var(--accent)","stroke-width":"2"});
+    el("circle",{cx:x(n-1),cy:y(arr[n-1]),r:4,fill:"var(--accent)"});
+    var t1=el("text",{x:p,y:12,fill:"var(--muted)","font-size":"11"}); t1.textContent="High "+mx.toFixed(2);
+    var t2=el("text",{x:p,y:H-1,fill:"var(--muted)","font-size":"11"}); t2.textContent="Low "+mn.toFixed(2);
+    return s;
+  }
+  function kv(pairs){ return h("dl",{class:"kv"},pairs.map(function(p){return h("div",{},[h("dt",{text:p[0]}),h("dd",{text:p[1]})]);})); }
+  function fundDetail(f){
+    var i=f.ind, r=f.returns, k=f.risk||{}, mc=i.macd;
+    var left=h("div",{},[sparkSvg(f.spark),
+      kv([["1M",fmtP(r["1m"])],["3M",fmtP(r["3m"])],["6M",fmtP(r["6m"])],["1Y",fmtP(r["1y"])],["3Y CAGR",fmtP(r["3y"])],["5Y CAGR",fmtP(r["5y"])]])]);
+    var right=h("div",{},[
+      kv([["RSI (14)",fmtN(i.rsi,1)],["MACD hist",mc?fmtN(mc.hist,3):"-"],["50-DMA",fmtN(i.sma50)],["200-DMA",fmtN(i.sma200)],
+          ["52W high",fmtN(i.hi52)],["From high",fmtP(i.from_high)],["Volatility (3Y)",fmtP(k.vol)],["Sharpe",fmtN(k.sharpe)],["Sortino",fmtN(k.sortino)],["Max drawdown",fmtP(k.maxdd)],
+          ["Quality score",f.quality==null?"-":fmtN(f.quality,0)],["Technical score",fmtN(f.tech,0)]]),
+      h("ul",{class:"why"},f.reasons.map(function(t){return h("li",{text:t});})),
+      h("div",{class:"asof",text:f.house+" · scheme "+f.code+" · "+f.history_years+" yrs of NAV history"})]);
+    return h("div",{class:"dgrid"},[left,right]);
+  }
+  function th(label,key,cur,set){ return h("th",{"data-k":key,onclick:function(){set(key);},"aria-sort":cur.k===key?(cur.d>0?"ascending":"descending"):"none",text:label}); }
+  function val(f,k){
+    switch(k){case "name":return f.name;case "nav":return f.nav;case "1y":return f.returns["1y"];case "3y":return f.returns["3y"];
+      case "rsi":return f.ind.rsi;case "total":return f.total;default:return null;}
+  }
+  function fundsView(){
+    var wrap=h("div",{});
+    var bar=h("div",{class:"bar"});
+    ["All","Large","Mid","Small","Flexi","Large & Mid"].forEach(function(b){
+      bar.appendChild(h("button",{class:"chip","aria-pressed":String(state.bucket===b),text:b==="All"?"All caps":b+" cap",onclick:function(){state.bucket=b;render();}}));
+    });
+    var sel=h("select",{id:"callsel","aria-label":"Filter by call",onchange:function(e){state.call=e.target.value;render();}},
+      ["All","Strong Buy","Buy","Hold","Reduce","Avoid","Insufficient history"].map(function(c){var o=h("option",{value:c,text:c==="All"?"Any call":c});if(c===state.call)o.selected=true;return o;}));
+    var q=h("input",{type:"search",id:"fq",placeholder:"Search fund or AMC",value:state.q,"aria-label":"Search funds",oninput:function(e){state.q=e.target.value;renderRows();}});
+    bar.appendChild(sel);bar.appendChild(q);wrap.appendChild(bar);
+    var tbl=h("table",{}), cur={k:state.sort,d:state.dir};
+    var set=function(k){ if(state.sort===k)state.dir*=-1;else{state.sort=k;state.dir=k==="name"?1:-1;} render(); };
+    tbl.appendChild(h("thead",{},[h("tr",{},[th("Fund","name",cur,set),th("NAV","nav",cur,set),th("1Y","1y",cur,set),th("3Y CAGR","3y",cur,set),th("RSI","rsi",cur,set),h("th",{text:"MACD"}),h("th",{text:"Trend"}),th("Score","total",cur,set),h("th",{text:"Call"})])]));
+    var tb=h("tbody",{}); tbl.appendChild(tb);
+    function renderRows(){
+      tb.textContent="";
+      var term=state.q.toLowerCase();
+      var rows=funds.filter(function(f){
+        return (state.bucket==="All"||f.bucket===state.bucket)&&(state.call==="All"||f.call===state.call)&&(!term||(f.name+" "+f.house).toLowerCase().indexOf(term)>-1);
+      });
+      rows.sort(function(a,b){var x=val(a,state.sort),y=val(b,state.sort);
+        if(x==null&&y==null)return 0;if(x==null)return 1;if(y==null)return -1;
+        return (x>y?1:x<y?-1:0)*state.dir;});
+      if(!rows.length){tb.appendChild(h("tr",{},[h("td",{colspan:"9",text:"No funds match these filters."})]));return;}
+      rows.forEach(function(f){
+        var i=f.ind, mc=i.macd, trend=!i.sma200?"-":f.nav>i.sma50&&i.sma50>i.sma200?"Up":f.nav>i.sma200?"Pullback":"Down";
+        var tr=h("tr",{class:"row",tabindex:"0","aria-expanded":String(open===f.code),onclick:function(){open=open===f.code?null:f.code;renderRows();},
+          onkeydown:function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();open=open===f.code?null:f.code;renderRows();}}},[
+          h("td",{class:"name"},[document.createTextNode(f.name.replace(/ - Direct.*$/i,"")),h("small",{text:f.house+" · "+f.bucket+" cap"})]),
+          h("td",{text:fmtN(f.nav)}),h("td",{class:cls(f.returns["1y"]),text:fmtP(f.returns["1y"])}),h("td",{class:cls(f.returns["3y"]),text:fmtP(f.returns["3y"])}),
+          h("td",{text:fmtN(i.rsi,0)}),h("td",{class:mc?cls(mc.hist):"",text:mc?(mc.hist>0?"Bullish":"Bearish"):"-"}),h("td",{text:trend}),
+          h("td",{},[h("span",{class:"sc"},[h("i",{style:"width:"+(f.total||0)+"%"})]),document.createTextNode(f.total==null?"-":fmtN(f.total,0))]),
+          h("td",{},[h("span",{class:"badge "+callCls(f.call),text:f.call})])]);
+        tb.appendChild(tr);
+        if(open===f.code) tb.appendChild(h("tr",{class:"detail"},[h("td",{colspan:"9"},[fundDetail(f)])]));
+      });
+    }
+    renderRows();
+    wrap.appendChild(h("div",{class:"tw"},[tbl]));
+    return wrap;
+  }
+  function ipoDetail(r){
+    var money=function(x,u){return x==null?"-":x.toLocaleString("en-IN")+(u||"");};
+    return h("div",{class:"dgrid"},[
+      h("div",{},[kv([["Price band",r.price_low!=null?"Rs "+r.price_low+" to "+r.price_high:"-"],["Lot size",money(r.lot_size)],["Min. investment",r.lot_size&&r.price_high?"Rs "+money(r.lot_size*r.price_high):"-"],
+        ["Issue size",money(r.issue_size_cr," Cr")],["Fresh / OFS",r.fresh_pct!=null?r.fresh_pct+"% / "+(r.ofs_pct==null?"-":r.ofs_pct+"%"):"-"],["GMP",r.gmp==null?"-":"Rs "+r.gmp+(r.gmp_pct!=null?" ("+r.gmp_pct+"%)":"")],
+        ["Opens",r.open_date||"-"],["Closes",r.close_date||"-"],["Listing",r.listing_date||"-"],["Lead manager",r.lead_manager||"-"]]),
+        h("div",{},[document.createTextNode(r.business||"")])]),
+      h("div",{},[kv([["QIB",r.sub_qib==null?"-":r.sub_qib+"x"],["HNI",r.sub_hni==null?"-":r.sub_hni+"x"],["Retail",r.sub_retail==null?"-":r.sub_retail+"x"],["Total",r.sub_total==null?"-":r.sub_total+"x"],
+        ["Revenue growth",r.rev_growth_pct==null?"-":r.rev_growth_pct+"%"],["Profit growth",r.pat_growth_pct==null?"-":r.pat_growth_pct+"%"],["ROE",r.roe_pct==null?"-":r.roe_pct+"%"],["ROCE",r.roce_pct==null?"-":r.roce_pct+"%"],
+        ["Debt / equity",fmtN(r.debt_equity)],["P/E issue vs peer",r.pe_issue!=null?r.pe_issue+" vs "+(r.pe_peer==null?"-":r.pe_peer):"-"],["Promoter post-issue",r.promoter_post_pct==null?"-":r.promoter_post_pct+"%"],["Data completeness",r.completeness+"%"]]),
+        h("ul",{class:"why"},r.reasons.map(function(t){return h("li",{text:t});})),
+        r.risks?h("div",{class:"asof",text:"Risks noted: "+r.risks}):null])]);
+  }
+  var ipoOpen=null;
+  function ipoView(){
+    var wrap=h("div",{});
+    if(!ipos.length){wrap.appendChild(h("div",{class:"empty",text:"No IPOs loaded. Add rows to data/ipo_input.csv (columns are already in the file) and run update_data.py again."}));return wrap;}
+    var bar=h("div",{class:"bar"});
+    ["All","Open","Upcoming","Closed","Listed"].forEach(function(s){bar.appendChild(h("button",{class:"chip","aria-pressed":String(state.ipoStatus===s),text:s,onclick:function(){state.ipoStatus=s;render();}}));});
+    wrap.appendChild(bar);
+    var tbl=h("table",{style:"min-width:760px"}),tb=h("tbody",{});
+    tbl.appendChild(h("thead",{},[h("tr",{},[h("th",{text:"IPO"}),h("th",{text:"Status"}),h("th",{text:"Price"}),h("th",{text:"GMP %"}),h("th",{text:"Subscribed"}),h("th",{text:"Score"}),h("th",{text:"Verdict"})])]));
+    var rows=ipos.filter(function(r){return state.ipoStatus==="All"||r.status===state.ipoStatus;}).sort(function(a,b){return b.score-a.score;});
+    rows.forEach(function(r){
+      var tr=h("tr",{class:"row",tabindex:"0","aria-expanded":String(ipoOpen===r.name),onclick:function(){ipoOpen=ipoOpen===r.name?null:r.name;render();},
+        onkeydown:function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();ipoOpen=ipoOpen===r.name?null:r.name;render();}}},[
+        h("td",{class:"name"},[document.createTextNode(r.name),h("small",{text:(r.board||"")+(r.issue_size_cr?" · Rs "+r.issue_size_cr+" Cr":"")})]),
+        h("td",{text:r.status}),h("td",{text:r.price_high!=null?"Rs "+r.price_high:"-"}),h("td",{class:cls(r.gmp_pct),text:r.gmp_pct==null?"-":r.gmp_pct+"%"}),
+        h("td",{text:r.sub_total==null?"-":r.sub_total+"x"}),
+        h("td",{},[h("span",{class:"sc"},[h("i",{style:"width:"+r.score+"%"})]),document.createTextNode(String(r.score))]),
+        h("td",{},[h("span",{class:"badge "+callCls(r.verdict),text:r.verdict})])]);
+      tb.appendChild(tr);
+      if(ipoOpen===r.name)tb.appendChild(h("tr",{class:"detail"},[h("td",{colspan:"7"},[ipoDetail(r)])]));
+    });
+    if(!rows.length)tb.appendChild(h("tr",{},[h("td",{colspan:"7",text:"No IPOs with this status."})]));
+    tbl.appendChild(tb);wrap.appendChild(h("div",{class:"tw"},[tbl]));
+    return wrap;
+  }
+  function render(){
+    app.textContent="";
+    app.appendChild(strip());
+    var tabs=h("div",{class:"tabs",role:"tablist"});
+    [["funds","Mutual funds"],["ipos","IPOs"]].forEach(function(t){
+      tabs.appendChild(h("button",{class:"tab",role:"tab","aria-selected":String(state.tab===t[0]),text:t[1],onclick:function(){state.tab=t[0];render();}}));
+    });
+    app.appendChild(tabs);
+    app.appendChild(state.tab==="funds"?fundsView():ipoView());
+  }
+  render();
+})();
+</script>
+</body>
+</html>
